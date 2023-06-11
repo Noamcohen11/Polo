@@ -18,7 +18,6 @@ def in_disk(x, y, R, center_x=0, center_y=0):
 
 
 def circle_rotate(image, x, y, radius, degree):
-    img_arr = np.asarray(image)
     box = (x - radius, y - radius, x + radius + 1, y + radius + 1)
     crop = image.crop(box=box)
     crop_arr = np.asarray(crop)

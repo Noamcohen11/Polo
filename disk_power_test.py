@@ -1,28 +1,35 @@
 import cv2
 import numpy as np
-from disk_funcs import in_disk
+import sys
 
 # from disk_compression_simulation import in_disk
 
 #########################
-####### Constants #######
+### my test constants ###
 #########################
 
-FOLDER_PATH = "/Users/noamcohen/Documents/Polo/"
 DEBUG_MODE = True
 
-########## LINE ##########
-LINE_IMAGE_PATH_LIST = [FOLDER_PATH + f"line/{i}.png" for i in range(1, 8)]
-LINE_CIRCLE_NUM = 4
+# for each structure, (name, number of images, number of circles)
+struct_dict = {
+    "line": ("line", 8, 4),
+    "square": ("square", 9, 9),
+    "piramide": ("piramide", 8, 9),
+    "rad": ("rad", 7, 6),
+}
 
-########## SQUARE ##########
-SQ_IMAGE_PATH_LIST = [FOLDER_PATH + f"square/{i}.png" for i in range(1, 9)]
-SQ_CIRCLE_NUM = 9
+
+def get_struct(struct_name):
+    (name, num_images, num_circles) = struct_dict[struct_name]
+    image_path_list = [
+        "./" + name + f"/{i}.png" for i in range(1, num_images + 1)
+    ]
+    return (image_path_list, num_circles)
 
 
-#########################
-######### funcs #########
-#########################
+#####################################################################
+# DO NOT CHANGE ANYTHING BELOW THIS LINE
+#####################################################################
 
 
 def detect_circles(image, num_circles=4, max_iterations=10) -> list:
@@ -57,10 +64,10 @@ def detect_circles(image, num_circles=4, max_iterations=10) -> list:
         circles = cv2.HoughCircles(
             blurred,
             cv2.HOUGH_GRADIENT,
-            1.3,
+            1.8,
             100,
             minRadius=70,
-            # maxRadius=400,
+            maxRadius=200,
         )
 
         # Ensure that circles are detected
@@ -168,11 +175,11 @@ def calculate_average_pixel_value(image, circles, threshold=40):
     return average_pixel_value
 
 
-def main():
-    for image_path in SQ_IMAGE_PATH_LIST:
+def main(image_path_list, circle_num):
+    for image_path in image_path_list:
         print(image_path)
         image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        circles = detect_circles(image, num_circles=SQ_CIRCLE_NUM)
+        circles = detect_circles(image, num_circles=circle_num)
 
         disks = []
         # Get the average pixel intensity of the disk
@@ -196,4 +203,19 @@ def main():
     return
 
 
-main()
+if __name__ == "__main__":
+    struct_type = "line"
+    error = False
+
+    if len(sys.argv) != 2:
+        error = True
+    else:
+        struct_type = sys.argv[1]
+        if struct_type not in struct_dict:
+            error = True
+    if error:
+        print("Usage: python3 {} [struct_type]".format(sys.argv[0]))
+        print("Available struct types: {}".format(struct_dict.keys()))
+        sys.exit(1)
+    (image_path_list, circle_num) = get_struct(struct_type)
+    main(image_path_list, circle_num)
