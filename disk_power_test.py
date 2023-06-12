@@ -1,14 +1,14 @@
 import cv2
 import numpy as np
 import sys
+from matplotlib import pyplot as plt
+import argparse
 
 # from disk_compression_simulation import in_disk
 
 #########################
 ### my test constants ###
 #########################
-
-DEBUG_MODE = True
 
 # for each structure, (name, number of images, number of circles)
 struct_dict = {
@@ -158,7 +158,7 @@ def calculate_average_pixel_value(image, circles, threshold=40):
     # Create a mask to exclude the circular regions
     mask = np.zeros_like(image, dtype=np.uint8)
     for circle in circles:
-        x, y, r = circle
+        x, y, r, _ = circle
         cv2.circle(mask, (x, y), r, (255), -1)
 
     # Apply the mask to exclude the circular regions from the image
@@ -175,17 +175,77 @@ def calculate_average_pixel_value(image, circles, threshold=40):
     return average_pixel_value
 
 
-def main(image_path_list, circle_num):
+def reorganize_disks(
+    disks: list[tuple[int, int, int, int]]
+) -> list[tuple[int, int, int, int]]:
+    """Reorganize the disks by their y position, then x position.
+
+    Args:
+        disks (list[tuple[int, int, int, int]]): list of disks
+
+    Returns: disks(list[tuple[int, int, int, int]]): reorganized list of disks
+    """
+
+    organized_disks = []
+    for disk in disks:
+        x, y, _, _ = disk
+        if len(organized_disks) == 0:
+            organized_disks.append(disk)
+            continue
+
+        for i in range(len(organized_disks)):
+            x_org, y_org, _, _ = organized_disks[i]
+            if y < y_org:
+                organized_disks.insert(i, disk)
+                break
+            elif y == y_org:
+                if x < x_org:
+                    organized_disks.insert(i, disk)
+                    break
+            elif i == len(organized_disks) - 1:
+                organized_disks.append(disk)
+                break
+    return organized_disks
+
+
+def plot_disk_average_values(
+    total_disks: list[list[tuple[int, int, int, int]]]
+) -> None:
+    """Plot the average pixel values per disk.
+
+    Args:
+        disks (list[list[tuple[int, int, int, int]]]): list of disks
+    """
+    image_index = [i for i in range(len(total_disks))]
+    for i in range(len(total_disks[0])):
+        plt.figure(i)
+        avg_per_disk = []
+        for image_disks in total_disks:
+            avg_per_disk.append(image_disks[i][3])
+        plt.plot(image_index, avg_per_disk, marker=".", linestyle="")
+        plt.show()
+
+
+def main(image_path_list, circle_num, debug_mode=False):
+    """Main function for the disk detection
+
+    Args:
+        image_path_list (list): list of image paths
+        circle_num (int): number of circles to detect
+    """
+
+    total_disks = []
     for image_path in image_path_list:
-        print(image_path)
         image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
         circles = detect_circles(image, num_circles=circle_num)
 
         disks = []
-        # Get the average pixel intensity of the disk
+        # Get the average pixel intensity of the disk.
         if len(circles) == 0:
             print("no circles found")
             continue
+
+        # Get the average pixel intensity of the disk.
         for (x, y, r) in circles:
             mask = np.zeros(image.shape[:2], dtype=np.uint8)
             cv2.circle(mask, (x, y), r // 10, 255, -1)
@@ -194,12 +254,19 @@ def main(image_path_list, circle_num):
             circle_average = np.mean(circle_pixels)
             disks.append((x, y, r, circle_average))
 
-        if DEBUG_MODE:
+        # Reorganize the disks by their x position, then y position.
+        disks = reorganize_disks(disks)
+        total_disks.append(disks)
+        # Plot the image of the disks.
+        if debug_mode:
 
-            print(calculate_average_pixel_value(image, circles))
+            print(calculate_average_pixel_value(image, disks))
             print(disks)
             og_image = cv2.imread(image_path)
             debug_show_disks(og_image, image, disks)
+
+    # Plot the average pixel values per disk.
+    plot_disk_average_values(total_disks)
     return
 
 
@@ -207,15 +274,24 @@ if __name__ == "__main__":
     struct_type = "line"
     error = False
 
-    if len(sys.argv) != 2:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_string", help="Input string")
+    parser.add_argument(
+        "--debug", action="store_true", help="Enable debug mode"
+    )
+    args = parser.parse_args()
+
+    debug = False
+    if args.debug:
+        print("Debug mode is enabled!")
+        debug = True
+
+    struct_type = args.input_string
+    if struct_type not in struct_dict:
         error = True
-    else:
-        struct_type = sys.argv[1]
-        if struct_type not in struct_dict:
-            error = True
     if error:
         print("Usage: python3 {} [struct_type]".format(sys.argv[0]))
         print("Available struct types: {}".format(struct_dict.keys()))
         sys.exit(1)
     (image_path_list, circle_num) = get_struct(struct_type)
-    main(image_path_list, circle_num)
+    main(image_path_list, circle_num, debug_mode=debug)
