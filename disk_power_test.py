@@ -3,19 +3,15 @@ import numpy as np
 import sys
 from matplotlib import pyplot as plt
 import argparse
-import getch
-
-# from disk_compression_simulation import in_disk
 
 #########################
 ### my test constants ###
 #########################
 
-# for each structure, (name, number of images, number of circles)
-
 ######### image #########
 IMAGE_FOLDER = "./images/"
 
+# for each structure, (name, number of images, number of circles)
 img_struct_dict = {
     "line": ("line", 8, 4),
     "square": ("square", 9, 9),
@@ -171,9 +167,11 @@ def debug_show_disks(og_image, image, disks):
         )
 
         cv2.imshow("Circle", concatenated_image)
-        cv2.waitKey(0)
+        key = cv2.waitKey(0)
         cv2.destroyAllWindows()
-    return
+        if key == ord("q"):
+            return True
+    return False
 
 
 def calculate_average_pixel_value(image, circles, threshold=40):
@@ -292,7 +290,9 @@ def images_plot(image_path_list, circle_num, debug_mode=False):
             print(calculate_average_pixel_value(image, disks))
             print(disks)
             og_image = cv2.imread(image_path)
-            debug_show_disks(og_image, image, disks)
+            stop = debug_show_disks(og_image, image, disks)
+            if stop:
+                return
 
     # Plot the average pixel values per disk.
     plot_disk_average_values(total_disks)
@@ -312,13 +312,10 @@ def vid_plot(video_path, circle_num, debug_mode=False):
             total_disks.append(disks)
         if debug_mode:
             print(disks)
-            debug_show_disks(frame, gray, disks)
-
-        key = getch.getch()
-        if key == "q":
-            video.release()
-            cv2.destroyAllWindows()
-            return
+            stop = debug_show_disks(frame, gray, disks)
+            if stop:
+                video.release()
+                return
 
     # clean up our resources
 
