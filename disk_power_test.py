@@ -3,6 +3,7 @@ import numpy as np
 import sys
 from matplotlib import pyplot as plt
 import argparse
+import getch
 
 # from disk_compression_simulation import in_disk
 
@@ -11,20 +12,41 @@ import argparse
 #########################
 
 # for each structure, (name, number of images, number of circles)
-struct_dict = {
+
+######### image #########
+IMAGE_FOLDER = "./images/"
+
+img_struct_dict = {
     "line": ("line", 8, 4),
     "square": ("square", 9, 9),
     "piramide": ("piramide", 8, 9),
     "rad": ("rad", 7, 6),
+    "single": ("red", 11, 1),
 }
 
 
-def get_struct(struct_name):
-    (name, num_images, num_circles) = struct_dict[struct_name]
+def get_img_path(struct_name):
+    (name, num_images, num_circles) = img_struct_dict[struct_name]
     image_path_list = [
-        "./" + name + f"/{i}.png" for i in range(1, num_images + 1)
+        IMAGE_FOLDER + name + f"/{i}.png" for i in range(1, num_images + 1)
     ]
     return (image_path_list, num_circles)
+
+
+######### videos #########
+VIDEOS_FOLDER = "./videos/"
+
+vid_struct_dict = {
+    "line": ("line.mov", 4),
+    "square": ("square.mov", 9),
+    "single": ("single.mov", 1),
+}
+
+
+def get_vid_path(struct_name):
+    (name, num_circles) = vid_struct_dict[struct_name]
+    image_path = VIDEOS_FOLDER + name
+    return (image_path, num_circles)
 
 
 #####################################################################
@@ -187,6 +209,8 @@ def reorganize_disks(
     """
 
     organized_disks = []
+    if disks is None:
+        return organized_disks
     for disk in disks:
         x, y, _, _ = disk
         if len(organized_disks) == 0:
@@ -216,7 +240,8 @@ def plot_disk_average_values(
     Args:
         disks (list[list[tuple[int, int, int, int]]]): list of disks
     """
-    image_index = [i for i in range(len(total_disks))]
+    image_index = list(range(len(total_disks)))
+    image_index = [i * 2 for i in image_index]
     for i in range(len(total_disks[0])):
         plt.figure(i)
         avg_per_disk = []
@@ -226,8 +251,29 @@ def plot_disk_average_values(
         plt.show()
 
 
-def main(image_path_list, circle_num, debug_mode=False):
-    """Main function for the disk detection
+def single_image_read(image, circle_num):
+    circles = detect_circles(image, num_circles=circle_num)
+
+    disks = []
+    # Get the average pixel intensity of the disk.
+    if len(circles) == 0:
+        print("no circles found")
+        return None
+
+    # Get the average pixel intensity of the disk.
+    for (x, y, r) in circles:
+        mask = np.zeros(image.shape[:2], dtype=np.uint8)
+        cv2.circle(mask, (x, y), r // 10, 255, -1)
+        masked_image = cv2.bitwise_and(image, image, mask=mask)
+        circle_pixels = masked_image[mask > 0]
+        circle_average = np.mean(circle_pixels)
+        disks.append((x, y, r, circle_average))
+
+    return disks
+
+
+def images_plot(image_path_list, circle_num, debug_mode=False):
+    """image_read function for the disk detection
 
     Args:
         image_path_list (list): list of image paths
@@ -237,25 +283,8 @@ def main(image_path_list, circle_num, debug_mode=False):
     total_disks = []
     for image_path in image_path_list:
         image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        circles = detect_circles(image, num_circles=circle_num)
-
-        disks = []
-        # Get the average pixel intensity of the disk.
-        if len(circles) == 0:
-            print("no circles found")
-            continue
-
-        # Get the average pixel intensity of the disk.
-        for (x, y, r) in circles:
-            mask = np.zeros(image.shape[:2], dtype=np.uint8)
-            cv2.circle(mask, (x, y), r // 10, 255, -1)
-            masked_image = cv2.bitwise_and(image, image, mask=mask)
-            circle_pixels = masked_image[mask > 0]
-            circle_average = np.mean(circle_pixels)
-            disks.append((x, y, r, circle_average))
-
         # Reorganize the disks by their x position, then y position.
-        disks = reorganize_disks(disks)
+        disks = reorganize_disks(single_image_read(image, circle_num))
         total_disks.append(disks)
         # Plot the image of the disks.
         if debug_mode:
@@ -270,6 +299,33 @@ def main(image_path_list, circle_num, debug_mode=False):
     return
 
 
+def vid_plot(video_path, circle_num, debug_mode=False):
+    video = cv2.VideoCapture(video_path)
+    total_disks = []
+    while True:
+        ret, frame = video.read()
+        if not ret:
+            break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        disks = reorganize_disks(single_image_read(gray, circle_num))
+        if len(disks) == circle_num:
+            total_disks.append(disks)
+        if debug_mode:
+            print(disks)
+            debug_show_disks(frame, gray, disks)
+
+        key = getch.getch()
+        if key == "q":
+            video.release()
+            cv2.destroyAllWindows()
+            return
+
+    # clean up our resources
+
+    plot_disk_average_values(total_disks)
+    return
+
+
 if __name__ == "__main__":
     struct_type = "line"
     error = False
@@ -279,6 +335,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug mode"
     )
+    parser.add_argument(
+        "--vid", action="store_true", help="handle video input"
+    )
     args = parser.parse_args()
 
     debug = False
@@ -286,12 +345,22 @@ if __name__ == "__main__":
         print("Debug mode is enabled!")
         debug = True
 
+    # Choose plot function based on input
     struct_type = args.input_string
-    if struct_type not in struct_dict:
+    if args.vid:
+        struct_dict = vid_struct_dict
+        plot_func = vid_plot
+        get_path = get_vid_path
+    else:
+        struct_dict = img_struct_dict
+        plot_func = images_plot
+        get_path = get_img_path
+    if struct_type not in img_struct_dict:
         error = True
     if error:
         print("Usage: python3 {} [struct_type]".format(sys.argv[0]))
         print("Available struct types: {}".format(struct_dict.keys()))
         sys.exit(1)
-    (image_path_list, circle_num) = get_struct(struct_type)
-    main(image_path_list, circle_num, debug_mode=debug)
+
+    (path_list, circle_num) = get_path(struct_type)
+    plot_func(path_list, circle_num, debug_mode=debug)
