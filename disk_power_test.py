@@ -210,21 +210,21 @@ def reorganize_disks(
     if disks is None:
         return organized_disks
     for disk in disks:
-        x, y, _, _ = disk
+        x, y, r, _ = disk
         if len(organized_disks) == 0:
             organized_disks.append(disk)
             continue
 
         for i in range(len(organized_disks)):
-            x_org, y_org, _, _ = organized_disks[i]
-            if y < y_org:
+            x_org, y_org, r_org, _ = organized_disks[i]
+            if y + r // 2 < y_org:
                 organized_disks.insert(i, disk)
                 break
-            elif y == y_org:
+            if y + r // 2 > y_org and y - r // 2 < y_org:
                 if x < x_org:
                     organized_disks.insert(i, disk)
                     break
-            elif i == len(organized_disks) - 1:
+            if i == len(organized_disks) - 1:
                 organized_disks.append(disk)
                 break
     return organized_disks
