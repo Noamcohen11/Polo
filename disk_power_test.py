@@ -174,27 +174,6 @@ def debug_show_disks(og_image, image, disks):
     return False
 
 
-def calculate_average_pixel_value(image, circles, threshold=40):
-    # Create a mask to exclude the circular regions
-    mask = np.zeros_like(image, dtype=np.uint8)
-    for circle in circles:
-        x, y, r, _ = circle
-        cv2.circle(mask, (x, y), r, (255), -1)
-
-    # Apply the mask to exclude the circular regions from the image
-    masked_image = cv2.bitwise_and(image, image, mask=~mask)
-
-    # Calculate the average pixel value of the masked image
-    masked_pixels = masked_image.flatten()
-    filtered_pixels = masked_pixels[masked_pixels > threshold]
-    if len(filtered_pixels) > 0:
-        average_pixel_value = np.mean(filtered_pixels)
-    else:
-        average_pixel_value = 0
-
-    return average_pixel_value
-
-
 def reorganize_disks(
     disks: list[tuple[int, int, int, int]]
 ) -> list[tuple[int, int, int, int]]:
@@ -231,22 +210,31 @@ def reorganize_disks(
 
 
 def plot_disk_average_values(
-    total_disks: list[list[tuple[int, int, int, int]]]
+    total_disks: list[list[tuple[int, int, int, int]]],
+    plot_axis: tuple[int, int] = (1, 1),
 ) -> None:
     """Plot the average pixel values per disk.
 
     Args:
         disks (list[list[tuple[int, int, int, int]]]): list of disks
+        plot_axis (tuple[int, int], optional): amount of plots per row and column. Defaults to (1,1).
     """
+    if len(total_disks[0]) != plot_axis[0] * plot_axis[1]:
+        raise ValueError(
+            "The amount of disks does not match the amount of plots."
+        )
+    figure, axis = plt.subplots(plot_axis[0], plot_axis[1])
     image_index = list(range(len(total_disks)))
     image_index = [i * 2 for i in image_index]
     for i in range(len(total_disks[0])):
-        plt.figure(i)
         avg_per_disk = []
         for image_disks in total_disks:
             avg_per_disk.append(image_disks[i][3])
-        plt.plot(image_index, avg_per_disk, marker=".", linestyle="")
-        plt.show()
+        axis[i // plot_axis[0], i % plot_axis[0]].plot(
+            image_index, avg_per_disk, marker=".", linestyle=""
+        )
+    plt.tight_layout()
+    plt.show()
 
 
 def single_image_read(image, circle_num):
@@ -270,7 +258,7 @@ def single_image_read(image, circle_num):
     return disks
 
 
-def images_plot(image_path_list, circle_num, debug_mode=False):
+def images_disks(image_path_list, circle_num, debug_mode=False):
     """image_read function for the disk detection
 
     Args:
@@ -287,19 +275,16 @@ def images_plot(image_path_list, circle_num, debug_mode=False):
         # Plot the image of the disks.
         if debug_mode:
 
-            print(calculate_average_pixel_value(image, disks))
-            print(disks)
             og_image = cv2.imread(image_path)
             stop = debug_show_disks(og_image, image, disks)
             if stop:
-                return
+                break
 
     # Plot the average pixel values per disk.
-    plot_disk_average_values(total_disks)
-    return
+    return total_disks
 
 
-def vid_plot(video_path, circle_num, debug_mode=False):
+def vid_disks(video_path, circle_num, debug_mode=False):
     video = cv2.VideoCapture(video_path)
     total_disks = []
     while True:
@@ -311,16 +296,14 @@ def vid_plot(video_path, circle_num, debug_mode=False):
         if len(disks) == circle_num:
             total_disks.append(disks)
         if debug_mode:
-            print(disks)
             stop = debug_show_disks(frame, gray, disks)
             if stop:
                 video.release()
-                return
+                break
 
     # clean up our resources
 
-    plot_disk_average_values(total_disks)
-    return
+    return total_disks
 
 
 if __name__ == "__main__":
@@ -346,13 +329,13 @@ if __name__ == "__main__":
     struct_type = args.input_string
     if args.vid:
         struct_dict = vid_struct_dict
-        plot_func = vid_plot
+        plot_func = vid_disks
         get_path = get_vid_path
     else:
         struct_dict = img_struct_dict
-        plot_func = images_plot
+        plot_func = images_disks
         get_path = get_img_path
-    if struct_type not in img_struct_dict:
+    if struct_type not in struct_dict:
         error = True
     if error:
         print("Usage: python3 {} [struct_type]".format(sys.argv[0]))
@@ -360,4 +343,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     (path_list, circle_num) = get_path(struct_type)
-    plot_func(path_list, circle_num, debug_mode=debug)
+    disks = plot_func(path_list, circle_num, debug_mode=debug)
+    plot_disk_average_values(disks, plot_axis=(3, 3))
