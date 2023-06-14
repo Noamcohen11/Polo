@@ -256,6 +256,26 @@ def plot_disk_average_values(
         plt.show()
 
 
+def disk_gradient(circle_pixels: np.ndarray) -> np.ndarray:
+    i_minus_1 = np.roll(circle_pixels, 1, axis=0)
+    i_plus_1 = np.roll(circle_pixels, -1, axis=0)
+    j_minus_1 = np.roll(circle_pixels, 1, axis=1)
+    j_plus_1 = np.roll(circle_pixels, -1, axis=1)
+    i_minus_1_j_minus_1 = np.roll(np.roll(circle_pixels, 1, axis=0), 1, axis=1)
+    i_plus_1_j_plus_1 = np.roll(np.roll(circle_pixels, -1, axis=0), -1, axis=1)
+    i_plus_1_j_minus_1 = np.roll(np.roll(circle_pixels, -1, axis=0), 1, axis=1)
+    i_minus_1_j_plus_1 = np.roll(np.roll(circle_pixels, 1, axis=0), -1, axis=1)
+
+    term1 = 0.25 * (0.25 * (i_minus_1 - i_plus_1) ** 2)
+    term2 = 0.125 * ((i_minus_1_j_minus_1 - i_plus_1_j_plus_1) ** 2)
+    term3 = 0.25 * ((j_minus_1 - j_plus_1) ** 2)
+    term4 = 0.125 * ((i_plus_1_j_minus_1 - i_minus_1_j_plus_1) ** 2)
+
+    G = np.mean(0.25 * (term1 + term2 + term3 + term4))
+
+    return G
+
+
 def single_image_read(image, circle_num):
     circles = detect_circles(image, num_circles=circle_num)
 
