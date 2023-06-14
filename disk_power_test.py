@@ -209,9 +209,9 @@ def reorganize_disks(
     return organized_disks
 
 
-def plot_disk_average_values(
+def plot_all_disk_average_values(
     total_disks: list[list[tuple[int, int, int, int]]],
-    plot_axis: tuple[int, int] = (1, 1),
+    plot_axis: tuple[int, int] = (3, 3),
 ) -> None:
     """Plot the average pixel values per disk.
 
@@ -235,6 +235,25 @@ def plot_disk_average_values(
         )
     plt.tight_layout()
     plt.show()
+
+
+def plot_disk_average_values(
+    total_disks: list[list[tuple[int, int, int, int]]]
+) -> None:
+    """Plot the average pixel values per disk.
+
+    Args:
+        disks (list[list[tuple[int, int, int, int]]]): list of disks
+    """
+    image_index = list(range(len(total_disks)))
+    image_index = [i * 2 for i in image_index]
+    for i in range(len(total_disks[0])):
+        plt.figure(i)
+        avg_per_disk = []
+        for image_disks in total_disks:
+            avg_per_disk.append(image_disks[i][3])
+        plt.plot(image_index, avg_per_disk, marker=".", linestyle="")
+        plt.show()
 
 
 def single_image_read(image, circle_num):
@@ -318,6 +337,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vid", action="store_true", help="handle video input"
     )
+    parser.add_argument(
+        "--plot_all", action="store_true", help="plot all at one graph"
+    )
     args = parser.parse_args()
 
     debug = False
@@ -344,4 +366,7 @@ if __name__ == "__main__":
 
     (path_list, circle_num) = get_path(struct_type)
     disks = plot_func(path_list, circle_num, debug_mode=debug)
-    plot_disk_average_values(disks, plot_axis=(3, 3))
+    if args.plot_all:
+        plot_all_disk_average_values(disks, plot_axis=(3, 3))
+    else:
+        plot_disk_average_values(disks)
