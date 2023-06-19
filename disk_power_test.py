@@ -34,7 +34,7 @@ def get_img_path(struct_name):
 VIDEOS_FOLDER = "./videos/"
 
 vid_struct_dict = {
-    "line": ("line 2.mov", 4),
+    "line": ("line.mov", 4),
     "square": ("square2.mov", 9),
     "single": ("single 2.5.mov", 1),
     "pir": ("pir.mov", 9),
@@ -274,15 +274,14 @@ def plot_disk_average_values(
     image_index = [i * 2 for i in image_index]
     csv_file = CSV_FOLDER + "single 2.5.csv"
 
-    stress = get_fitting_stress(
-        30, [image[0][3] for image in total_disks], csv_file
-    )
-
     for i in range(len(total_disks[0])):
         plt.figure(i)
         avg_per_disk = []
         for image_disks in total_disks:
             avg_per_disk.append(image_disks[i][3])
+        stress = get_fitting_stress(
+            30, [image[i][3] for image in total_disks], csv_file
+        )
         plt.plot(image_index, avg_per_disk, marker=".", linestyle="")
         plt.show()
 
@@ -406,7 +405,7 @@ def interpolate_cav_values(frame_times, x_values, y_values):
             idx += 1
         start_idx = max(0, idx - 30)
         end_idx = min(len(y_values), idx + 31)
-        average_y = np.mean(y_values[start_idx:end_idx])
+        average_y = np.mean(y_values[start_idx:end_idx]) / 2
         interp_y_values.append(average_y)
 
     return interp_y_values
@@ -464,7 +463,12 @@ def get_fitting_stress(fps, disk, csv_filename):
     interp_csv_values = [(-1) * i for i in interp_csv_values]
 
     # Plot the synced values
-    plt.plot(interp_csv_values, synced_video_values, marker=".", linestyle="")
+    plt.plot(
+        interp_csv_values[30:-30],
+        synced_video_values[30:-30],
+        marker=".",
+        linestyle="",
+    )
     plt.xlabel("stress")
     plt.ylabel("avg pixel value")
     plt.legend(["Video", "CSV"])
