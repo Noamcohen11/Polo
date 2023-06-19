@@ -34,8 +34,9 @@ VIDEOS_FOLDER = "./videos/"
 
 vid_struct_dict = {
     "line": ("line 2.mov", 4),
-    "square": ("square.mov", 9),
+    "square": ("square2.mov", 9),
     "single": ("single 2.5.mov", 1),
+    "pir": ("pir.mov", 11),
 }
 
 
@@ -84,7 +85,7 @@ def detect_circles(image, num_circles=4, max_iterations=10) -> list:
             cv2.HOUGH_GRADIENT,
             1.8,
             100,
-            minRadius=70,
+            minRadius=30,
             maxRadius=200,
         )
 
@@ -256,8 +257,9 @@ def plot_disk_average_values(
         plt.show()
 
 
-def single_image_read(image, circle_num):
-    circles = detect_circles(image, num_circles=circle_num)
+def single_image_read(image, circle_num, circles=None):
+    if circles is None:
+        circles = detect_circles(image, num_circles=circle_num)
 
     disks = []
     # Get the average pixel intensity of the disk.
@@ -306,13 +308,19 @@ def images_disks(image_path_list, circle_num, debug_mode=False):
 def vid_disks(video_path, circle_num, debug_mode=False):
     video = cv2.VideoCapture(video_path)
     total_disks = []
+    disks = None
     while True:
         ret, frame = video.read()
         if not ret:
             break
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        disks = reorganize_disks(single_image_read(gray, circle_num))
-        if len(disks) == circle_num:
+        if disks is None:
+            disks = reorganize_disks(single_image_read(gray, circle_num))
+        else:
+            circles = [tuple[:3] for tuple in disks]
+            disks = single_image_read(gray, circle_num, circles=circles)
+
+        if len(disks) >= circle_num:
             total_disks.append(disks)
         if debug_mode:
             stop = debug_show_disks(frame, gray, disks)
