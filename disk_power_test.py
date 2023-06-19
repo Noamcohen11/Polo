@@ -33,9 +33,9 @@ def get_img_path(struct_name):
 VIDEOS_FOLDER = "./videos/"
 
 vid_struct_dict = {
-    "line": ("line.mov", 4),
+    "line": ("line 2.mov", 4),
     "square": ("square.mov", 9),
-    "single": ("single.mov", 1),
+    "single": ("single 2.5.mov", 1),
 }
 
 
