@@ -161,6 +161,12 @@ def debug_show_disks(og_image, image, disks):
         right_image_resized = cv2.resize(
             right_image_resized, (desired_width, desired_height)
         )
+        left_image_resized = cv2.applyColorMap(
+            left_image_resized, cv2.COLORMAP_PARULA
+        )
+        right_image_resized = cv2.applyColorMap(
+            right_image_resized, cv2.COLORMAP_PARULA
+        )
 
         # Concatenate the two images horizontally
         concatenated_image = np.concatenate(
