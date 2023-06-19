@@ -36,7 +36,7 @@ vid_struct_dict = {
     "line": ("line 2.mov", 4),
     "square": ("square2.mov", 9),
     "single": ("single 2.5.mov", 1),
-    "pir": ("pir.mov", 11),
+    "pir": ("pir.mov", 9),
 }
 
 
@@ -257,6 +257,35 @@ def plot_disk_average_values(
         plt.show()
 
 
+def disk_gradient(image) -> np.ndarray:
+    # Pad the image to handle border pixels
+    padded_image = np.pad(image, 1, mode="edge")
+
+    # Extract the required pixels
+    i_minus_1 = padded_image[:-2, 1:-1]
+    i_plus_1 = padded_image[2:, 1:-1]
+    j_minus_1 = padded_image[1:-1, :-2]
+    j_plus_1 = padded_image[1:-1, 2:]
+    i_minus_1_j_minus_1 = padded_image[:-2, :-2]
+    i_plus_1_j_plus_1 = padded_image[2:, 2:]
+    i_plus_1_j_minus_1 = padded_image[2:, :-2]
+    i_minus_1_j_plus_1 = padded_image[:-2, 2:]
+
+    # Calculate the gradient terms
+    term1 = 0.25 * (0.25 * (i_minus_1 - i_plus_1) ** 2)
+    term2 = 0.125 * ((i_minus_1_j_minus_1 - i_plus_1_j_plus_1) ** 2)
+    term3 = 0.25 * ((j_minus_1 - j_plus_1) ** 2)
+    term4 = 0.125 * ((i_plus_1_j_minus_1 - i_minus_1_j_plus_1) ** 2)
+
+    # Calculate the mean gradient
+    gradient = np.mean(0.25 * (term1 + term2 + term3 + term4))
+
+    # Calculate the gradient image
+    gradient_image = np.sqrt(term1 + term2 + term3 + term4)
+
+    return gradient_image
+
+
 def single_image_read(image, circle_num, circles=None):
     if circles is None:
         circles = detect_circles(image, num_circles=circle_num)
@@ -270,7 +299,7 @@ def single_image_read(image, circle_num, circles=None):
     # Get the average pixel intensity of the disk.
     for (x, y, r) in circles:
         mask = np.zeros(image.shape[:2], dtype=np.uint8)
-        cv2.circle(mask, (x, y), r // 10, 255, -1)
+        cv2.circle(mask, (x, y), r, 255, -1)
         masked_image = cv2.bitwise_and(image, image, mask=mask)
         circle_pixels = masked_image[mask > 0]
         circle_average = np.mean(circle_pixels)
@@ -308,20 +337,26 @@ def images_disks(image_path_list, circle_num, debug_mode=False):
 def vid_disks(video_path, circle_num, debug_mode=False):
     video = cv2.VideoCapture(video_path)
     total_disks = []
+    total_gradient = []
     disks = None
     while True:
         ret, frame = video.read()
         if not ret:
             break
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gradient_magnitude = disk_gradient(gray)
         if disks is None:
             disks = reorganize_disks(single_image_read(gray, circle_num))
-        else:
             circles = [tuple[:3] for tuple in disks]
+        else:
             disks = single_image_read(gray, circle_num, circles=circles)
 
+        gradient_disks = single_image_read(
+            gradient_magnitude, circle_num, circles=circles
+        )
         if len(disks) >= circle_num:
             total_disks.append(disks)
+            total_gradient.append(gradient_disks)
         if debug_mode:
             stop = debug_show_disks(frame, gray, disks)
             if stop:
@@ -330,7 +365,7 @@ def vid_disks(video_path, circle_num, debug_mode=False):
 
     # clean up our resources
 
-    return total_disks
+    return (total_disks, total_gradient)
 
 
 if __name__ == "__main__":
@@ -373,8 +408,10 @@ if __name__ == "__main__":
         sys.exit(1)
 
     (path_list, circle_num) = get_path(struct_type)
-    disks = plot_func(path_list, circle_num, debug_mode=debug)
+    (disks, grad_disks) = plot_func(path_list, circle_num, debug_mode=debug)
     if args.plot_all:
         plot_all_disk_average_values(disks, plot_axis=(3, 3))
+        plot_all_disk_average_values(grad_disks, plot_axis=(3, 3))
     else:
         plot_disk_average_values(disks)
+        plot_disk_average_values(grad_disks)
