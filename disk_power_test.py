@@ -3,6 +3,7 @@ import numpy as np
 import sys
 from matplotlib import pyplot as plt
 import argparse
+import csv
 
 #########################
 ### my test constants ###
@@ -45,6 +46,8 @@ def get_vid_path(struct_name):
     image_path = VIDEOS_FOLDER + name
     return (image_path, num_circles)
 
+
+CSV_FOLDER = "./csv/"
 
 #####################################################################
 # DO NOT CHANGE ANYTHING BELOW THIS LINE
@@ -123,7 +126,14 @@ def debug_show_disks(og_image, image, disks):
     mask = np.zeros(image.shape[:2], dtype=np.uint8)
     for (x, y, r, disk_avg) in disks:
         cv2.circle(mask, (x, y), r, 255, -1)
-        output = cv2.bitwise_and(image, image, mask=mask)
+
+        gradient_magnitude = disk_gradient(image)
+
+        output = cv2.bitwise_and(
+            gradient_magnitude, gradient_magnitude, mask=mask
+        )
+
+        # output = cv2.bitwise_and(image, image, mask=mask)
 
         left_image = cv2.cvtColor(og_image, cv2.COLOR_BGR2GRAY)
         right_image = output
@@ -161,11 +171,19 @@ def debug_show_disks(og_image, image, disks):
         right_image_resized = cv2.resize(
             right_image_resized, (desired_width, desired_height)
         )
+
         left_image_resized = cv2.applyColorMap(
-            left_image_resized, cv2.COLORMAP_PARULA
+            left_image_resized, cv2.COLORMAP_INFERNO
+        )
+        right_image_resized = cv2.normalize(
+            right_image_resized, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+        )
+
+        right_image_resized = cv2.cvtColor(
+            right_image_resized, cv2.COLOR_GRAY2BGR
         )
         right_image_resized = cv2.applyColorMap(
-            right_image_resized, cv2.COLORMAP_PARULA
+            right_image_resized, cv2.COLORMAP_INFERNO
         )
 
         # Concatenate the two images horizontally
@@ -254,6 +272,12 @@ def plot_disk_average_values(
     """
     image_index = list(range(len(total_disks)))
     image_index = [i * 2 for i in image_index]
+    csv_file = CSV_FOLDER + "single 2.5.csv"
+
+    stress = get_fitting_stress(
+        30, [image[0][3] for image in total_disks], csv_file
+    )
+
     for i in range(len(total_disks[0])):
         plt.figure(i)
         avg_per_disk = []
@@ -374,6 +398,80 @@ def vid_disks(video_path, circle_num, debug_mode=False):
     return (total_disks, total_gradient)
 
 
+def interpolate_cav_values(frame_times, x_values, y_values):
+    interp_y_values = []
+    idx = 10  # Starting index in the x_values and y_values
+    for time in frame_times:
+        while idx < len(x_values) - 1 and x_values[idx] <= time:
+            idx += 1
+        start_idx = max(0, idx - 30)
+        end_idx = min(len(y_values), idx + 31)
+        average_y = np.mean(y_values[start_idx:end_idx])
+        interp_y_values.append(average_y)
+
+    return interp_y_values
+
+
+def get_fitting_stress(fps, disk, csv_filename):
+    x_values = []
+    y_values = []
+
+    with open(csv_filename, "r") as csv_file:
+        csv_reader = csv.reader(csv_file)
+        next(csv_reader)  # Skip the header row if present
+
+        for row in csv_reader:
+            time = float(row[3])  # Assuming time is in the first column
+            value = float(row[4])  # Assuming value is in the second column
+            x_values.append(time)
+            y_values.append(value)
+
+    # Calculate the time values for the video frames using the frame rate (fps)
+    num_frames = len(disk)
+    frame_times = np.linspace(0, num_frames / fps, num_frames)
+
+    # Convert the video values to a numpy array
+    video_values = np.array(disk)
+
+    # Calculate the derivative of the video values
+    video_derivative = np.gradient(video_values)
+
+    # Calculate the derivative of the CSV values
+    csv_derivative = np.gradient(y_values)
+
+    csv_derivative = np.resize(csv_derivative, len(video_derivative))
+    # Find the position where both derivatives start to change
+    sync_start = max(
+        0,
+        np.where(
+            (np.abs(video_derivative) > 0) & (np.abs(csv_derivative) > 0)
+        )[0][0],
+    )
+
+    # Find the position where both derivatives stop changing
+    sync_stop = min(len(video_derivative), len(csv_derivative))
+
+    # Sync the video values and CSV values based on the found positions
+    synced_video_values = video_values[sync_start:340]
+    synced_frame_times = frame_times[sync_start:340]
+    synced_csv_values = y_values[sync_start:340]
+
+    # Interpolate the CSV values for the synced frame times
+    interp_csv_values = interpolate_cav_values(
+        synced_frame_times, x_values, y_values
+    )
+
+    interp_csv_values = [(-1) * i for i in interp_csv_values]
+
+    # Plot the synced values
+    plt.plot(interp_csv_values, synced_video_values, marker=".", linestyle="")
+    plt.xlabel("stress")
+    plt.ylabel("avg pixel value")
+    plt.legend(["Video", "CSV"])
+    plt.grid(True)
+    plt.show()
+
+
 if __name__ == "__main__":
     struct_type = "line"
     error = False
@@ -418,6 +516,7 @@ if __name__ == "__main__":
     if args.plot_all:
         plot_all_disk_average_values(disks, plot_axis=(3, 3))
         plot_all_disk_average_values(grad_disks, plot_axis=(3, 3))
+
     else:
         plot_disk_average_values(disks)
         plot_disk_average_values(grad_disks)
